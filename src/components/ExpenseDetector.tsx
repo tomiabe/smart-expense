@@ -555,6 +555,20 @@ export default function ExpenseDetector() {
                     )}
                 </SheetContent>
             </Sheet>
+            {/* Footer Credit */}
+            <div className="pt-12 pb-8 text-center">
+                <p className="text-sm text-muted-foreground">
+                    Made by{" "}
+                    <a
+                        href="https://studio.tomiabe.com"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-medium text-foreground hover:text-primary transition-colors underline underline-offset-4"
+                    >
+                        Tomi Abe Studio
+                    </a>
+                </p>
+            </div>
         </div>
     )
 }
