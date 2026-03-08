@@ -468,7 +468,7 @@ export default function ExpenseDetector() {
                                 </div>
                             </SheetHeader>
 
-                            <div className="p-8 pt-0 space-y-4">
+                            <div className="p-8 pt-8 space-y-4">
                                 <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                                     Matched Transactions
                                 </p>
