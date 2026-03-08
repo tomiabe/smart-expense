@@ -525,7 +525,7 @@ export default function ExpenseDetector() {
                                                                 <div className="space-y-3">
                                                                     <div>
                                                                         <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Full Narration</p>
-                                                                        <p className="text-xs leading-relaxed text-foreground/80 break-words capitalize italic">
+                                                                        <p className="text-sm leading-relaxed text-foreground/80 break-words capitalize">
                                                                             "{tx.Description}"
                                                                         </p>
                                                                     </div>
