@@ -239,12 +239,16 @@ export default function ExpenseDetector() {
                 if (i.type === "fee") icon = <AlertCircle className="w-5 h-5 text-red-500" />
                 if (i.type === "frequent") icon = <Repeat className="w-5 h-5 text-orange-500" />
 
-                // Find the raw transactions that match this insight by scanning for keywords from its description
-                const keywords = i.title.toLowerCase().split(/\s+/).filter((w: string) => w.length > 3)
-                const matchingTxs = parsed.filter(tx =>
-                    keywords.some((kw: string) => tx.Description.toLowerCase().includes(kw)) ||
-                    tx.Amount === i.totalAmount / i.count
-                ).slice(0, 20)
+                // Strict filtering using the AI-provided merchantKeyword
+                const kw = (i.merchantKeyword || "").toLowerCase().trim()
+                const matchingTxs = parsed.filter(tx => {
+                    const desc = tx.Description.toLowerCase()
+                    // Primary match: exact keyword present in description
+                    if (kw && desc.includes(kw)) return true
+                    // Secondary safety: amount matches exactly (useful for fixed fees like SMS)
+                    if (tx.Amount === i.totalAmount / i.count && kw && desc.includes(kw.substring(0, 3))) return true
+                    return false
+                }).slice(0, 20)
 
                 return { ...i, id: `ai-${idx}`, icon, transactions: matchingTxs }
             })
@@ -260,13 +264,6 @@ export default function ExpenseDetector() {
     }
 
     const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
-
-    const typeColors: Record<string, string> = {
-        subscription: "from-purple-500/10 to-purple-500/5 border-purple-200/30 dark:border-purple-800/30",
-        transport: "from-blue-500/10 to-blue-500/5 border-blue-200/30 dark:border-blue-800/30",
-        fee: "from-red-500/10 to-red-500/5 border-red-200/30 dark:border-red-800/30",
-        frequent: "from-orange-500/10 to-orange-500/5 border-orange-200/30 dark:border-orange-800/30",
-    }
 
     const resetAll = () => {
         setInsights([])
@@ -352,13 +349,9 @@ export default function ExpenseDetector() {
                     className="space-y-6"
                 >
                     {/* Personalised header */}
-                    <div className="rounded-2xl bg-gradient-to-br from-blue-600/[0.08] to-indigo-600/[0.08] border border-blue-200/30 dark:border-indigo-800/30 p-6">
+                    <div className="rounded-2xl bg-white/40 dark:bg-black/40 backdrop-blur-xl border border-zinc-200/50 dark:border-zinc-800/50 p-6">
                         <div className="flex items-start justify-between gap-4">
                             <div>
-                                <div className="flex items-center gap-2 mb-1">
-                                    <Sparkles className="w-4 h-4 text-indigo-500" />
-                                    <span className="text-xs font-semibold uppercase tracking-widest text-indigo-500">AI Detective Report</span>
-                                </div>
                                 <h2 className="text-2xl font-bold tracking-tight mb-1">
                                     {userName ? `Hey ${userName}, here's what we found 🕵️` : "Detective Report 🕵️"}
                                 </h2>
@@ -401,10 +394,10 @@ export default function ExpenseDetector() {
                                 >
                                     <button
                                         onClick={() => openDrawer(insight)}
-                                        className="w-full text-left cursor-pointer group"
+                                        className="w-full h-full text-left cursor-pointer group"
                                         aria-label={`View details for ${insight.title}`}
                                     >
-                                        <Card className={`h-full bg-gradient-to-br ${typeColors[insight.type]} backdrop-blur-lg border transition-all group-hover:shadow-lg group-hover:-translate-y-0.5 duration-200`}>
+                                        <Card className="h-full bg-white/60 dark:bg-gray-950/60 backdrop-blur-lg border-white/20 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(255,255,255,0.02)] transition-all hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] group-hover:-translate-y-0.5 duration-200">
                                             <CardHeader className="pb-2">
                                                 <div className="flex items-center justify-between mb-2">
                                                     <div className="p-2 bg-background/80 rounded-lg shadow-sm">
@@ -444,7 +437,7 @@ export default function ExpenseDetector() {
 
             {/* Drawer — transaction breakdowns */}
             <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
-                <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">
+                <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
                     {selectedInsight && (
                         <>
                             <SheetHeader className="pb-4 border-b">

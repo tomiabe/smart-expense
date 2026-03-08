@@ -13,7 +13,8 @@ const InsightSchema = z.object({
     title: z.string().describe("A concise 2-4 word title, like 'Hidden Subscription' or 'Unexpected Bank Fees'"),
     description: z.string().describe("A short sentence explaining the insight, e.g., 'You paid ₦5,000 to Netflix 3 times.'"),
     totalAmount: z.number().describe("The total sum of money spent on this specific insight group"),
-    count: z.number().describe("The number of times this specific expense occurred")
+    count: z.number().describe("The number of times this specific expense occurred"),
+    merchantKeyword: z.string().describe("The primary keyword found in the raw transaction description for this insight, e.g., 'BOLT', 'NETFLIX', or 'MEGA CHICKEN'.")
 })
 
 export async function POST(req: Request) {
