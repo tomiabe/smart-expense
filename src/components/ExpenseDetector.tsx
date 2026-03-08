@@ -481,17 +481,30 @@ export default function ExpenseDetector() {
                                                 initial={{ opacity: 0, x: 10 }}
                                                 animate={{ opacity: 1, x: 0 }}
                                                 transition={{ delay: idx * 0.04 }}
-                                                className="flex items-center justify-between gap-3 p-4 rounded-xl bg-muted/40 border border-border/40"
+                                                className="flex flex-col gap-3 p-5 rounded-2xl bg-muted/30 border border-border/40"
                                             >
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-sm font-medium truncate capitalize">{tx.Description.substring(0, 50)}</p>
-                                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                                <div className="flex items-start justify-between gap-4">
+                                                    <div className="space-y-1">
+                                                        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60">Transaction Narration</p>
+                                                        <p className="text-sm font-medium leading-relaxed capitalize">
+                                                            {tx.Description}
+                                                        </p>
+                                                    </div>
+                                                    <div className="shrink-0 text-right">
+                                                        <p className="text-base font-bold text-red-500">-₦{tx.Amount.toLocaleString()}</p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex items-center gap-4 pt-2 border-t border-border/20">
+                                                    <div className="flex items-center gap-1.5">
                                                         <Calendar className="w-3 h-3 text-muted-foreground" />
                                                         <p className="text-xs text-muted-foreground">{tx.Date}</p>
                                                     </div>
-                                                </div>
-                                                <div className="shrink-0 text-right">
-                                                    <p className="text-sm font-bold text-red-500">-₦{tx.Amount.toLocaleString()}</p>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <Badge variant="outline" className="text-[10px] uppercase tracking-tighter h-4 px-1.5 opacity-60">
+                                                            Outgoing Debit
+                                                        </Badge>
+                                                    </div>
                                                 </div>
                                             </motion.div>
                                         ))
