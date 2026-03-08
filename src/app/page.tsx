@@ -25,10 +25,24 @@ export default function Home() {
         <ExpenseDetector />
       </div>
 
-      <div className="relative z-10 mt-4 pb-12 flex flex-wrap justify-center gap-6 text-sm text-zinc-500 dark:text-zinc-400 font-medium px-4">
-        <p className="flex items-center gap-2"><span className="text-lg">🧠</span> AI-powered logic</p>
-        <p className="flex items-center gap-2"><span className="text-lg">🛡️</span> Encrypted data transit</p>
-        <p className="flex items-center gap-2"><span className="text-lg">⚡</span> Instant insights</p>
+      <div className="relative z-10 mt-4 pb-8 flex flex-col items-center gap-6">
+        <div className="flex flex-wrap justify-center gap-6 text-sm text-zinc-500 dark:text-zinc-400 font-medium px-4">
+          <p className="flex items-center gap-2"><span className="text-lg">🧠</span> AI-powered logic</p>
+          <p className="flex items-center gap-2"><span className="text-lg">🛡️</span> Encrypted data transit</p>
+          <p className="flex items-center gap-2"><span className="text-lg">⚡</span> Instant insights</p>
+        </div>
+
+        <p className="text-sm text-zinc-500 dark:text-zinc-400 font-medium">
+          Made by{" "}
+          <a
+            href="https://studio.tomiabe.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-zinc-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors underline underline-offset-4"
+          >
+            Tomi Abe Studio
+          </a>
+        </p>
       </div>
     </main>
   );
