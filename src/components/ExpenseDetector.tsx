@@ -437,10 +437,10 @@ export default function ExpenseDetector() {
 
             {/* Drawer — transaction breakdowns */}
             <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
-                <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
+                <SheetContent side="right" className="w-[95%] sm:max-w-2xl overflow-y-auto p-0">
                     {selectedInsight && (
-                        <>
-                            <SheetHeader className="pb-4 border-b">
+                        <div className="flex flex-col h-full gap-0">
+                            <SheetHeader className="p-8 pb-6 border-b">
                                 <div className="flex items-center gap-3 mb-2">
                                     <div className="p-2 bg-muted rounded-lg">
                                         {selectedInsight.icon}
@@ -468,41 +468,43 @@ export default function ExpenseDetector() {
                                 </div>
                             </SheetHeader>
 
-                            <div className="mt-5 space-y-3">
-                                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground px-1">
+                            <div className="p-8 pt-0 space-y-4">
+                                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                                     Matched Transactions
                                 </p>
 
-                                {selectedInsight.transactions && selectedInsight.transactions.length > 0 ? (
-                                    selectedInsight.transactions.map((tx, idx) => (
-                                        <motion.div
-                                            key={idx}
-                                            initial={{ opacity: 0, x: 10 }}
-                                            animate={{ opacity: 1, x: 0 }}
-                                            transition={{ delay: idx * 0.04 }}
-                                            className="flex items-center justify-between gap-3 p-3 rounded-xl bg-muted/40 border border-border/40"
-                                        >
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-sm font-medium truncate capitalize">{tx.Description.substring(0, 50)}</p>
-                                                <div className="flex items-center gap-1.5 mt-0.5">
-                                                    <Calendar className="w-3 h-3 text-muted-foreground" />
-                                                    <p className="text-xs text-muted-foreground">{tx.Date}</p>
+                                <div className="space-y-3">
+                                    {selectedInsight.transactions && selectedInsight.transactions.length > 0 ? (
+                                        selectedInsight.transactions.map((tx, idx) => (
+                                            <motion.div
+                                                key={idx}
+                                                initial={{ opacity: 0, x: 10 }}
+                                                animate={{ opacity: 1, x: 0 }}
+                                                transition={{ delay: idx * 0.04 }}
+                                                className="flex items-center justify-between gap-3 p-4 rounded-xl bg-muted/40 border border-border/40"
+                                            >
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm font-medium truncate capitalize">{tx.Description.substring(0, 50)}</p>
+                                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                                        <Calendar className="w-3 h-3 text-muted-foreground" />
+                                                        <p className="text-xs text-muted-foreground">{tx.Date}</p>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            <div className="shrink-0 text-right">
-                                                <p className="text-sm font-bold text-red-500">-₦{tx.Amount.toLocaleString()}</p>
-                                            </div>
-                                        </motion.div>
-                                    ))
-                                ) : (
-                                    <div className="text-center py-10 text-muted-foreground text-sm">
-                                        <DollarSign className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                                        <p>No individual transactions found for this pattern.</p>
-                                        <p className="text-xs mt-1">The AI identified this from the full statement context.</p>
-                                    </div>
-                                )}
+                                                <div className="shrink-0 text-right">
+                                                    <p className="text-sm font-bold text-red-500">-₦{tx.Amount.toLocaleString()}</p>
+                                                </div>
+                                            </motion.div>
+                                        ))
+                                    ) : (
+                                        <div className="text-center py-10 text-muted-foreground text-sm">
+                                            <DollarSign className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                                            <p>No individual transactions found for this pattern.</p>
+                                            <p className="text-xs mt-1">The AI identified this from the full statement context.</p>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                        </>
+                        </div>
                     )}
                 </SheetContent>
             </Sheet>
