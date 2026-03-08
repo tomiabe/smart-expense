@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from "react"
 import Papa from "papaparse"
 import { motion, AnimatePresence } from "framer-motion"
-import { UploadCloud, CarFront, Tv, AlertCircle, Search, Repeat, ChevronRight, X, Calendar, DollarSign, FileText, Sparkles } from "lucide-react"
+import { UploadCloud, CarFront, Tv, AlertCircle, Search, Repeat, ChevronRight, X, Calendar, DollarSign, FileText, Sparkles, ChevronDown } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -26,6 +26,7 @@ type Insight = {
     count: number
     icon: React.ReactNode
     transactions?: Transaction[]
+    merchantKeyword?: string
 }
 
 export default function ExpenseDetector() {
@@ -40,6 +41,7 @@ export default function ExpenseDetector() {
     const [progressLabel, setProgressLabel] = useState("")
     const [selectedInsight, setSelectedInsight] = useState<Insight | null>(null)
     const [drawerOpen, setDrawerOpen] = useState(false)
+    const [expandedTx, setExpandedTx] = useState<number | null>(null)
 
     const PROGRESS_STEPS = [
         { pct: 10, label: "Reading your statement..." },
@@ -74,9 +76,17 @@ export default function ExpenseDetector() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [loading])
 
+    useEffect(() => {
+        if (!drawerOpen) setExpandedTx(null)
+    }, [drawerOpen])
+
     const openDrawer = (insight: Insight) => {
         setSelectedInsight(insight)
         setDrawerOpen(true)
+    }
+
+    const toggleTx = (idx: number) => {
+        setExpandedTx(expandedTx === idx ? null : idx)
     }
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -123,7 +133,6 @@ export default function ExpenseDetector() {
                         const nameMatch = line.match(/CUSTOMER STATEMENT[\s\n]+([A-Z ,]+)/i)
                         if (nameMatch) {
                             const raw = nameMatch[1].trim()
-                            // Convert "ABE , KAYODE JESUTOMILAYO" → "Kayode"
                             const parts = raw.replace(/,/g, " ").trim().split(/\s+/).filter(Boolean)
                             if (parts.length >= 2) {
                                 setUserName(capitalize(parts[1].toLowerCase()))
@@ -231,7 +240,6 @@ export default function ExpenseDetector() {
 
             const { insights, totalSpent } = await res.json()
 
-            // Map icons + attach matching raw transactions to each insight for the drawer
             const finalInsights = insights.map((i: any, idx: number) => {
                 let icon = <Search className="w-5 h-5 text-yellow-500" />
                 if (i.type === "subscription") icon = <Tv className="w-5 h-5 text-purple-500" />
@@ -239,13 +247,10 @@ export default function ExpenseDetector() {
                 if (i.type === "fee") icon = <AlertCircle className="w-5 h-5 text-red-500" />
                 if (i.type === "frequent") icon = <Repeat className="w-5 h-5 text-orange-500" />
 
-                // Strict filtering using the AI-provided merchantKeyword
                 const kw = (i.merchantKeyword || "").toLowerCase().trim()
                 const matchingTxs = parsed.filter(tx => {
                     const desc = tx.Description.toLowerCase()
-                    // Primary match: exact keyword present in description
                     if (kw && desc.includes(kw)) return true
-                    // Secondary safety: amount matches exactly (useful for fixed fees like SMS)
                     if (tx.Amount === i.totalAmount / i.count && kw && desc.includes(kw.substring(0, 3))) return true
                     return false
                 }).slice(0, 20)
@@ -348,7 +353,6 @@ export default function ExpenseDetector() {
                     animate={{ opacity: 1 }}
                     className="space-y-6"
                 >
-                    {/* Personalised header */}
                     <div className="rounded-2xl bg-white/40 dark:bg-black/40 backdrop-blur-xl border border-zinc-200/50 dark:border-zinc-800/50 p-6">
                         <div className="flex items-start justify-between gap-4">
                             <div>
@@ -367,7 +371,6 @@ export default function ExpenseDetector() {
                             </Button>
                         </div>
 
-                        {/* Quick stat pills */}
                         <div className="flex flex-wrap gap-2 mt-4">
                             {[
                                 { label: "Subscriptions", val: insights.filter(i => i.type === "subscription").length, color: "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300" },
@@ -382,7 +385,6 @@ export default function ExpenseDetector() {
                         </div>
                     </div>
 
-                    {/* Insight cards */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         <AnimatePresence>
                             {insights.map((insight, i) => (
@@ -435,7 +437,6 @@ export default function ExpenseDetector() {
                 </motion.div>
             )}
 
-            {/* Drawer — transaction breakdowns */}
             <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
                 <SheetContent side="right" className="w-[95%] sm:max-w-2xl overflow-y-auto p-0">
                     {selectedInsight && (
@@ -451,7 +452,6 @@ export default function ExpenseDetector() {
                                     </div>
                                 </div>
 
-                                {/* Summary pills */}
                                 <div className="flex gap-3 mt-3">
                                     <div className="flex-1 bg-muted/60 rounded-xl p-3 text-center">
                                         <p className="text-xs text-muted-foreground mb-0.5">Total Spent</p>
@@ -473,41 +473,75 @@ export default function ExpenseDetector() {
                                     Matched Transactions
                                 </p>
 
-                                <div className="space-y-3">
+                                <div className="space-y-4">
                                     {selectedInsight.transactions && selectedInsight.transactions.length > 0 ? (
-                                        selectedInsight.transactions.map((tx, idx) => (
-                                            <motion.div
-                                                key={idx}
-                                                initial={{ opacity: 0, x: 10 }}
-                                                animate={{ opacity: 1, x: 0 }}
-                                                transition={{ delay: idx * 0.04 }}
-                                                className="flex flex-col gap-3 p-5 rounded-2xl bg-muted/30 border border-border/40"
-                                            >
-                                                <div className="flex items-start justify-between gap-4">
-                                                    <div className="space-y-1">
-                                                        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60">Transaction Narration</p>
-                                                        <p className="text-sm font-medium leading-relaxed capitalize">
-                                                            {tx.Description}
-                                                        </p>
-                                                    </div>
-                                                    <div className="shrink-0 text-right">
-                                                        <p className="text-base font-bold text-red-500">-₦{tx.Amount.toLocaleString()}</p>
-                                                    </div>
-                                                </div>
+                                        selectedInsight.transactions.map((tx, idx) => {
+                                            const isExpanded = expandedTx === idx;
+                                            return (
+                                                <motion.div
+                                                    key={idx}
+                                                    layout
+                                                    initial={{ opacity: 0, scale: 0.98 }}
+                                                    animate={{ opacity: 1, scale: 1 }}
+                                                    transition={{ duration: 0.2 }}
+                                                    className="flex flex-col overflow-hidden rounded-2xl border border-border/40 bg-muted/30 transition-colors hover:bg-muted/50"
+                                                >
+                                                    <button
+                                                        onClick={() => toggleTx(idx)}
+                                                        className="flex items-center justify-between gap-4 p-4 text-left cursor-pointer"
+                                                    >
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex items-center gap-2 mb-1">
+                                                                <Calendar className="w-3 h-3 text-muted-foreground" />
+                                                                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                                                    {tx.Date}
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-sm font-medium truncate capitalize">
+                                                                {isExpanded ? tx.Description : tx.Description.substring(0, 45) + "..."}
+                                                            </p>
+                                                        </div>
+                                                        <div className="flex items-center gap-4 shrink-0">
+                                                            <p className="text-sm font-bold text-red-500">-₦{tx.Amount.toLocaleString()}</p>
+                                                            <motion.div
+                                                                animate={{ rotate: isExpanded ? 180 : 0 }}
+                                                                transition={{ duration: 0.3, ease: "easeInOut" }}
+                                                                className="text-muted-foreground/50"
+                                                            >
+                                                                <ChevronDown className="w-4 h-4" />
+                                                            </motion.div>
+                                                        </div>
+                                                    </button>
 
-                                                <div className="flex items-center gap-4 pt-2 border-t border-border/20">
-                                                    <div className="flex items-center gap-1.5">
-                                                        <Calendar className="w-3 h-3 text-muted-foreground" />
-                                                        <p className="text-xs text-muted-foreground">{tx.Date}</p>
-                                                    </div>
-                                                    <div className="flex items-center gap-1.5">
-                                                        <Badge variant="outline" className="text-[10px] uppercase tracking-tighter h-4 px-1.5 opacity-60">
-                                                            Outgoing Debit
-                                                        </Badge>
-                                                    </div>
-                                                </div>
-                                            </motion.div>
-                                        ))
+                                                    <AnimatePresence>
+                                                        {isExpanded && (
+                                                            <motion.div
+                                                                initial={{ height: 0, opacity: 0 }}
+                                                                animate={{ height: "auto", opacity: 1 }}
+                                                                exit={{ height: 0, opacity: 0 }}
+                                                                transition={{ duration: 0.3, ease: "easeInOut" }}
+                                                                className="border-t border-border/20 px-4 py-3 bg-muted/20"
+                                                            >
+                                                                <div className="space-y-3">
+                                                                    <div>
+                                                                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Full Narration</p>
+                                                                        <p className="text-xs leading-relaxed text-foreground/80 break-words capitalize italic">
+                                                                            "{tx.Description}"
+                                                                        </p>
+                                                                    </div>
+                                                                    <div className="flex items-center justify-between pt-2">
+                                                                        <Badge variant="outline" className="text-[9px] h-5 rounded-full border-blue-200/50 bg-blue-50/30 text-blue-600 dark:text-blue-400">
+                                                                            Pattern Match: Confirmed
+                                                                        </Badge>
+                                                                        <p className="text-[10px] text-muted-foreground">ID: {(idx + 1).toString().padStart(3, '0')}</p>
+                                                                    </div>
+                                                                </div>
+                                                            </motion.div>
+                                                        )}
+                                                    </AnimatePresence>
+                                                </motion.div>
+                                            );
+                                        })
                                     ) : (
                                         <div className="text-center py-10 text-muted-foreground text-sm">
                                             <DollarSign className="w-8 h-8 mx-auto mb-2 opacity-30" />
