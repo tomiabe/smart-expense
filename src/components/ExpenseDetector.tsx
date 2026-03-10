@@ -29,6 +29,18 @@ type Insight = {
     merchantKeyword?: string
 }
 
+type CurrencyInfo = {
+    code: string
+    symbol: string
+    locale: string
+}
+
+const DEFAULT_CURRENCY: CurrencyInfo = {
+    code: "NGN",
+    symbol: "₦",
+    locale: "en-NG",
+}
+
 export default function ExpenseDetector() {
     const [loading, setLoading] = useState(false)
     const [insights, setInsights] = useState<Insight[]>([])
@@ -46,6 +58,7 @@ export default function ExpenseDetector() {
     const [pdfPassword, setPdfPassword] = useState("")
     const [pdfPasswordError, setPdfPasswordError] = useState("")
     const [pendingPdfFile, setPendingPdfFile] = useState<File | null>(null)
+    const [currency, setCurrency] = useState<CurrencyInfo>(DEFAULT_CURRENCY)
 
     const PROGRESS_STEPS = [
         { pct: 10, label: "Reading your statement..." },
@@ -97,6 +110,49 @@ export default function ExpenseDetector() {
         return error?.name === "PasswordException" || error?.code === 1 || error?.code === 2
     }
 
+    const detectCurrencyFromText = (text: string): CurrencyInfo | null => {
+        const normalized = text.toUpperCase()
+        const symbolMap: Record<string, CurrencyInfo> = {
+            "₦": { code: "NGN", symbol: "₦", locale: "en-NG" },
+            "£": { code: "GBP", symbol: "£", locale: "en-GB" },
+            "$": { code: "USD", symbol: "$", locale: "en-US" },
+            "€": { code: "EUR", symbol: "€", locale: "en-IE" },
+            "₵": { code: "GHS", symbol: "₵", locale: "en-GH" },
+        }
+
+        for (const symbol of Object.keys(symbolMap)) {
+            if (text.includes(symbol)) return symbolMap[symbol]
+        }
+
+        const codeMatch = normalized.match(/\b(NGN|GBP|USD|EUR|GHS|ZAR|KES|CAD|AUD)\b/)
+        if (codeMatch) {
+            const code = codeMatch[1]
+            if (code === "NGN") return symbolMap["₦"]
+            if (code === "GBP") return symbolMap["£"]
+            if (code === "USD") return symbolMap["$"]
+            if (code === "EUR") return symbolMap["€"]
+            if (code === "GHS") return symbolMap["₵"]
+            if (code === "ZAR") return { code: "ZAR", symbol: "R", locale: "en-ZA" }
+            if (code === "KES") return { code: "KES", symbol: "KSh", locale: "en-KE" }
+            if (code === "CAD") return { code: "CAD", symbol: "$", locale: "en-CA" }
+            if (code === "AUD") return { code: "AUD", symbol: "$", locale: "en-AU" }
+        }
+
+        return null
+    }
+
+    const formatMoney = (amount: number) => {
+        try {
+            return new Intl.NumberFormat(currency.locale, {
+                style: "currency",
+                currency: currency.code,
+                maximumFractionDigits: 2,
+            }).format(amount)
+        } catch {
+            return `${currency.symbol}${amount.toLocaleString()}`
+        }
+    }
+
     const parsePdf = async (arrayBuffer: ArrayBuffer, password?: string) => {
         try {
             const pdfjsLib = await import("pdfjs-dist")
@@ -105,6 +161,7 @@ export default function ExpenseDetector() {
             const pdf = await pdfjsLib.getDocument({ data: arrayBuffer, password }).promise
 
             const allTransactions: Transaction[] = []
+            let detectedCurrency: CurrencyInfo | null = null
 
             for (let i = 1; i <= pdf.numPages; i++) {
                 const page = await pdf.getPage(i)
@@ -128,6 +185,9 @@ export default function ExpenseDetector() {
 
                 // Try to extract account holder name from header lines
                 for (const line of lines) {
+                    if (!detectedCurrency) {
+                        detectedCurrency = detectCurrencyFromText(line)
+                    }
                     const nameMatch = line.match(/CUSTOMER STATEMENT[\s\n]+([A-Z ,]+)/i)
                     if (nameMatch) {
                         const raw = nameMatch[1].trim()
@@ -180,6 +240,10 @@ export default function ExpenseDetector() {
                 }
             }
 
+            if (detectedCurrency) {
+                setCurrency(detectedCurrency)
+            }
+
             setParsedTransactions(allTransactions)
             setPdfPassword("")
             setPdfPasswordError("")
@@ -221,6 +285,7 @@ export default function ExpenseDetector() {
 
     const analyzeCSV = (data: Record<string, string>[]) => {
         const parsed: Transaction[] = []
+        let detectedCurrency: CurrencyInfo | null = null
 
         data.forEach((row) => {
             let desc = ""
@@ -239,10 +304,19 @@ export default function ExpenseDetector() {
                 }
             }
 
+            if (!detectedCurrency) {
+                const rowText = Object.values(row).join(" ")
+                detectedCurrency = detectCurrencyFromText(rowText)
+            }
+
             if (desc && amt > 0) {
                 parsed.push({ Date: date, Description: desc.toLowerCase(), Amount: amt, Type: "debit" })
             }
         })
+
+        if (detectedCurrency) {
+            setCurrency(detectedCurrency)
+        }
 
         setParsedTransactions(parsed)
         analyzeParsedTransactions(parsed)
@@ -253,7 +327,7 @@ export default function ExpenseDetector() {
             const res = await fetch("/api/analyze", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ transactions: parsed })
+                body: JSON.stringify({ transactions: parsed, currency })
             })
 
             if (!res.ok) throw new Error("Failed to analyze data")
@@ -300,6 +374,7 @@ export default function ExpenseDetector() {
         setPdfPassword("")
         setPdfPasswordError("")
         setPendingPdfFile(null)
+        setCurrency(DEFAULT_CURRENCY)
     }
 
     const cancelPassword = () => {
@@ -451,7 +526,7 @@ export default function ExpenseDetector() {
                                     We detected <span className="font-semibold text-foreground">{insights.length} spending patterns</span> in{" "}
                                     <span className="font-semibold text-foreground">{fileName || "your statement"}</span>.
                                     Total outflows analysed:{" "}
-                                    <span className="font-semibold text-red-500">₦{totalSpent.toLocaleString()}</span>
+                                    <span className="font-semibold text-red-500">{formatMoney(totalSpent)}</span>
                                 </p>
                             </div>
                             <Button variant="outline" onClick={resetAll} size="sm" className="rounded-full cursor-pointer shrink-0">
@@ -509,7 +584,7 @@ export default function ExpenseDetector() {
                                                 <div className="mt-4 pt-4 border-t border-border/50">
                                                     <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Total Impact</p>
                                                     <p className="text-2xl font-bold tracking-tight text-red-500">
-                                                        -₦{insight.totalAmount.toLocaleString()}
+                                                        {formatMoney(-insight.totalAmount)}
                                                     </p>
                                                 </div>
                                                 <p className="text-xs text-muted-foreground mt-3 flex items-center gap-1">
@@ -543,7 +618,7 @@ export default function ExpenseDetector() {
                                 <div className="flex gap-3 mt-3">
                                     <div className="flex-1 bg-muted/60 rounded-xl p-3 text-center">
                                         <p className="text-xs text-muted-foreground mb-0.5">Total Spent</p>
-                                        <p className="text-lg font-bold text-red-500">₦{selectedInsight.totalAmount.toLocaleString()}</p>
+                                        <p className="text-lg font-bold text-red-500">{formatMoney(selectedInsight.totalAmount)}</p>
                                     </div>
                                     <div className="flex-1 bg-muted/60 rounded-xl p-3 text-center">
                                         <p className="text-xs text-muted-foreground mb-0.5">Occurrences</p>
@@ -551,7 +626,7 @@ export default function ExpenseDetector() {
                                     </div>
                                     <div className="flex-1 bg-muted/60 rounded-xl p-3 text-center">
                                         <p className="text-xs text-muted-foreground mb-0.5">Avg. Charge</p>
-                                        <p className="text-lg font-bold">₦{Math.round(selectedInsight.totalAmount / selectedInsight.count).toLocaleString()}</p>
+                                        <p className="text-lg font-bold">{formatMoney(Math.round(selectedInsight.totalAmount / selectedInsight.count))}</p>
                                     </div>
                                 </div>
                             </SheetHeader>
@@ -590,7 +665,7 @@ export default function ExpenseDetector() {
                                                             </p>
                                                         </div>
                                                         <div className="flex items-center gap-4 shrink-0">
-                                                            <p className="text-sm font-bold text-red-500">-₦{tx.Amount.toLocaleString()}</p>
+                                                            <p className="text-sm font-bold text-red-500">{formatMoney(-tx.Amount)}</p>
                                                             <motion.div
                                                                 animate={{ rotate: isExpanded ? 180 : 0 }}
                                                                 transition={{ duration: 0.3, ease: "easeInOut" }}
