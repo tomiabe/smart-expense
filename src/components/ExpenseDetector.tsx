@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from "react"
 import Papa from "papaparse"
 import { motion, AnimatePresence } from "framer-motion"
-import { UploadCloud, CarFront, Tv, AlertCircle, Search, Repeat, ChevronRight, X, Calendar, DollarSign, FileText, Sparkles, ChevronDown } from "lucide-react"
+import { UploadCloud, CarFront, Tv, AlertCircle, Search, Repeat, ChevronRight, Calendar, DollarSign, FileText, ChevronDown, Lock } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -42,6 +42,10 @@ export default function ExpenseDetector() {
     const [selectedInsight, setSelectedInsight] = useState<Insight | null>(null)
     const [drawerOpen, setDrawerOpen] = useState(false)
     const [expandedTx, setExpandedTx] = useState<number | null>(null)
+    const [passwordOpen, setPasswordOpen] = useState(false)
+    const [pdfPassword, setPdfPassword] = useState("")
+    const [pdfPasswordError, setPdfPasswordError] = useState("")
+    const [pendingPdfFile, setPendingPdfFile] = useState<File | null>(null)
 
     const PROGRESS_STEPS = [
         { pct: 10, label: "Reading your statement..." },
@@ -89,6 +93,110 @@ export default function ExpenseDetector() {
         setExpandedTx(expandedTx === idx ? null : idx)
     }
 
+    const isPasswordError = (error: any) => {
+        return error?.name === "PasswordException" || error?.code === 1 || error?.code === 2
+    }
+
+    const parsePdf = async (arrayBuffer: ArrayBuffer, password?: string) => {
+        try {
+            const pdfjsLib = await import("pdfjs-dist")
+            pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`
+
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer, password }).promise
+
+            const allTransactions: Transaction[] = []
+
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i)
+                const content = await page.getTextContent()
+
+                let lastY = -1
+                let currentLine = ""
+                const lines: string[] = []
+
+                for (const item of content.items as { str: string; transform: number[] }[]) {
+                    if (!item.transform) continue
+                    const y = Math.round(item.transform[5])
+                    if (lastY !== -1 && Math.abs(lastY - y) > 5 && currentLine.trim()) {
+                        lines.push(currentLine.trim())
+                        currentLine = ""
+                    }
+                    currentLine += item.str + " "
+                    lastY = y
+                }
+                if (currentLine.trim()) lines.push(currentLine.trim())
+
+                // Try to extract account holder name from header lines
+                for (const line of lines) {
+                    const nameMatch = line.match(/CUSTOMER STATEMENT[\s\n]+([A-Z ,]+)/i)
+                    if (nameMatch) {
+                        const raw = nameMatch[1].trim()
+                        const parts = raw.replace(/,/g, " ").trim().split(/\s+/).filter(Boolean)
+                        if (parts.length >= 2) {
+                            setUserName(capitalize(parts[1].toLowerCase()))
+                        }
+                    }
+                }
+
+                let currentDate = "Unknown"
+                for (let j = 0; j < lines.length; j++) {
+                    const line = lines[j]
+                    const amountMatches = line.matchAll(/([\d,]+\.[\d]{2})/g)
+                    const matchesArray = Array.from(amountMatches).map(m => parseFloat(m[1].replace(/,/g, "")))
+
+                    const dateMatch = line.match(/(\d{1,2}[\\/\-][a-zA-Z]{3}[\\/\-]\d{2,4}|\d{1,2}[\\/\-]\d{1,2}[\\/\-]\d{2,4})/)
+                    if (dateMatch) {
+                        currentDate = dateMatch[0]
+                    }
+
+                    if (matchesArray.length > 0) {
+                        const amtToUse = matchesArray[0]
+
+                        if (amtToUse > 0 && amtToUse < 5000000) {
+                            let desc = line.replace(/([\d,]+\.[\d]{2})/g, "").replace(currentDate, "").trim()
+                            desc = desc.replace(/\b\d{5,}\b/g, "").trim()
+                            desc = desc.replace(/^[^\w]+|[^\w]+$/g, "")
+
+                            let extraDesc = ""
+                            for (let k = j + 1; k < Math.min(j + 4, lines.length); k++) {
+                                if (lines[k].match(/([\d,]+\.[\d]{2})/) || lines[k].match(/(\d{1,2}[\\/\-][a-zA-Z]{3}[\\/\-]\d{2,4})/)) {
+                                    break
+                                }
+                                extraDesc += " " + lines[k]
+                            }
+
+                            desc = (desc + extraDesc).trim()
+
+                            if (desc.length > 3) {
+                                allTransactions.push({
+                                    Date: currentDate,
+                                    Description: desc.toLowerCase(),
+                                    Amount: amtToUse,
+                                    Type: "debit"
+                                })
+                            }
+                        }
+                    }
+                }
+            }
+
+            setParsedTransactions(allTransactions)
+            setPdfPassword("")
+            setPdfPasswordError("")
+            setPasswordOpen(false)
+            analyzeParsedTransactions(allTransactions)
+        } catch (error) {
+            if (isPasswordError(error)) {
+                setLoading(false)
+                setPasswordOpen(true)
+                setPdfPasswordError(password ? "Incorrect password. Try again." : "")
+                return
+            }
+            console.error("Error parsing PDF:", error)
+            setLoading(false)
+        }
+    }
+
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]
         if (!file) return
@@ -97,97 +205,9 @@ export default function ExpenseDetector() {
         setFileName(file.name)
 
         if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
-            try {
-                const pdfjsLib = await import("pdfjs-dist")
-                pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`
-
-                const arrayBuffer = await file.arrayBuffer()
-                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
-
-                const allTransactions: Transaction[] = []
-                const allLines: string[] = []
-
-                for (let i = 1; i <= pdf.numPages; i++) {
-                    const page = await pdf.getPage(i)
-                    const content = await page.getTextContent()
-
-                    let lastY = -1
-                    let currentLine = ""
-                    const lines: string[] = []
-
-                    for (const item of content.items as { str: string; transform: number[] }[]) {
-                        if (!item.transform) continue
-                        const y = Math.round(item.transform[5])
-                        if (lastY !== -1 && Math.abs(lastY - y) > 5 && currentLine.trim()) {
-                            lines.push(currentLine.trim())
-                            currentLine = ""
-                        }
-                        currentLine += item.str + " "
-                        lastY = y
-                    }
-                    if (currentLine.trim()) lines.push(currentLine.trim())
-                    allLines.push(...lines)
-
-                    // Try to extract account holder name from header lines
-                    for (const line of lines) {
-                        const nameMatch = line.match(/CUSTOMER STATEMENT[\s\n]+([A-Z ,]+)/i)
-                        if (nameMatch) {
-                            const raw = nameMatch[1].trim()
-                            const parts = raw.replace(/,/g, " ").trim().split(/\s+/).filter(Boolean)
-                            if (parts.length >= 2) {
-                                setUserName(capitalize(parts[1].toLowerCase()))
-                            }
-                        }
-                    }
-
-                    let currentDate = "Unknown"
-                    for (let j = 0; j < lines.length; j++) {
-                        const line = lines[j]
-                        const amountMatches = line.matchAll(/([\d,]+\.[\d]{2})/g)
-                        const matchesArray = Array.from(amountMatches).map(m => parseFloat(m[1].replace(/,/g, '')))
-
-                        const dateMatch = line.match(/(\d{1,2}[\\/\-][a-zA-Z]{3}[\\/\-]\d{2,4}|\d{1,2}[\\/\-]\d{1,2}[\\/\-]\d{2,4})/)
-                        if (dateMatch) {
-                            currentDate = dateMatch[0]
-                        }
-
-                        if (matchesArray.length > 0) {
-                            const amtToUse = matchesArray[0]
-
-                            if (amtToUse > 0 && amtToUse < 5000000) {
-                                let desc = line.replace(/([\d,]+\.[\d]{2})/g, "").replace(currentDate, "").trim()
-                                desc = desc.replace(/\b\d{5,}\b/g, "").trim()
-                                desc = desc.replace(/^[^\w]+|[^\w]+$/g, "")
-
-                                let extraDesc = ""
-                                for (let k = j + 1; k < Math.min(j + 4, lines.length); k++) {
-                                    if (lines[k].match(/([\d,]+\.[\d]{2})/) || lines[k].match(/(\d{1,2}[\\/\-][a-zA-Z]{3}[\\/\-]\d{2,4})/)) {
-                                        break
-                                    }
-                                    extraDesc += " " + lines[k]
-                                }
-
-                                desc = (desc + extraDesc).trim()
-
-                                if (desc.length > 3) {
-                                    allTransactions.push({
-                                        Date: currentDate,
-                                        Description: desc.toLowerCase(),
-                                        Amount: amtToUse,
-                                        Type: "debit"
-                                    })
-                                }
-                            }
-                        }
-                    }
-                }
-
-                setParsedTransactions(allTransactions)
-                analyzeParsedTransactions(allTransactions)
-            } catch (error) {
-                console.error("Error parsing PDF:", error)
-                setLoading(false)
-            }
+            const arrayBuffer = await file.arrayBuffer()
+            setPendingPdfFile(file)
+            parsePdf(arrayBuffer)
         } else {
             Papa.parse(file, {
                 header: true,
@@ -276,10 +296,78 @@ export default function ExpenseDetector() {
         setFileName("")
         setUserName("")
         setParsedTransactions([])
+        setPasswordOpen(false)
+        setPdfPassword("")
+        setPdfPasswordError("")
+        setPendingPdfFile(null)
+    }
+
+    const cancelPassword = () => {
+        setPasswordOpen(false)
+        setPdfPassword("")
+        setPdfPasswordError("")
+        setPendingPdfFile(null)
+        setFileName("")
+        setLoading(false)
+    }
+
+    const handlePasswordSubmit = async (e: React.FormEvent) => {
+        e.preventDefault()
+        if (!pendingPdfFile) return
+        setPdfPasswordError("")
+        setLoading(true)
+        const arrayBuffer = await pendingPdfFile.arrayBuffer()
+        parsePdf(arrayBuffer, pdfPassword)
     }
 
     return (
         <div className="w-full max-w-4xl mx-auto space-y-8">
+            {passwordOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-blue-200/40 via-purple-200/30 to-rose-200/30 dark:from-blue-900/10 dark:via-purple-900/10 dark:to-rose-900/10 backdrop-blur-md px-4">
+                    <Card className="w-full max-w-md border-zinc-200/60 dark:border-zinc-800/60 bg-white/80 dark:bg-black/70 backdrop-blur-xl shadow-[0_20px_60px_rgba(0,0,0,0.2)]">
+                        <CardHeader className="pb-2">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 rounded-lg bg-primary/10">
+                                    <Lock className="w-4 h-4 text-primary" />
+                                </div>
+                                <div>
+                                    <CardTitle className="text-lg">Password Required</CardTitle>
+                                    <CardDescription className="text-sm">This PDF is encrypted. Enter the password to continue.</CardDescription>
+                                </div>
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            <form onSubmit={handlePasswordSubmit} className="space-y-4">
+                                <div className="space-y-2">
+                                    <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">PDF Password</label>
+                                    <input
+                                        type="password"
+                                        autoFocus
+                                        value={pdfPassword}
+                                        onChange={(e) => setPdfPassword(e.target.value)}
+                                        className="w-full h-11 rounded-xl border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                                        placeholder="Enter password"
+                                    />
+                                    {pdfPasswordError && (
+                                        <p className="text-xs text-red-600">{pdfPasswordError}</p>
+                                    )}
+                                    <p className="text-[11px] text-muted-foreground">
+                                        The password is used only in your browser to unlock the file. It is not saved or sent to the server.
+                                    </p>
+                                </div>
+                                <div className="flex items-center justify-end gap-2">
+                                    <Button type="button" variant="outline" onClick={cancelPassword} className="rounded-full">
+                                        Cancel
+                                    </Button>
+                                    <Button type="submit" className="rounded-full" disabled={!pdfPassword.trim()}>
+                                        Unlock PDF
+                                    </Button>
+                                </div>
+                            </form>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
             {/* Upload state */}
             {insights.length === 0 && !loading && (
                 <motion.div
