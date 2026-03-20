@@ -731,7 +731,7 @@ export default function ExpenseDetector() {
                                 variant="secondary"
                                 size="sm"
                                 onClick={downloadSummaryCsv}
-                                className="rounded-full bg-black text-white hover:bg-zinc-900 dark:bg-white dark:text-black dark:hover:bg-zinc-100"
+                                className="rounded-full bg-[#111] text-white hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-100"
                             >
                                 <Download className="w-4 h-4 mr-2" />
                                 Download Summary
@@ -740,7 +740,7 @@ export default function ExpenseDetector() {
                                 variant="secondary"
                                 size="sm"
                                 onClick={downloadTransactionsCsv}
-                                className="rounded-full bg-black text-white hover:bg-zinc-900 dark:bg-white dark:text-black dark:hover:bg-zinc-100"
+                                className="rounded-full bg-[#111] text-white hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-100"
                             >
                                 <Download className="w-4 h-4 mr-2" />
                                 Download Transactions
