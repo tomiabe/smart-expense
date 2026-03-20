@@ -3,7 +3,8 @@
 import React, { useState, useRef, useEffect } from "react"
 import Papa from "papaparse"
 import { motion, AnimatePresence } from "framer-motion"
-import { UploadCloud, CarFront, Tv, AlertCircle, Search, Repeat, ChevronRight, Calendar, DollarSign, FileText, ChevronDown, Lock } from "lucide-react"
+import { UploadCloud, CarFront, Tv, AlertCircle, Search, Repeat, ChevronRight, Calendar, DollarSign, FileText, ChevronDown, Lock, Download, BarChart3, PieChart as PieChartIcon } from "lucide-react"
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from "recharts"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -59,6 +60,7 @@ export default function ExpenseDetector() {
     const [pdfPasswordError, setPdfPasswordError] = useState("")
     const [pendingPdfFile, setPendingPdfFile] = useState<File | null>(null)
     const [currency, setCurrency] = useState<CurrencyInfo>(DEFAULT_CURRENCY)
+    const [chartType, setChartType] = useState<"category" | "merchant">("category")
 
     const PROGRESS_STEPS = [
         { pct: 10, label: "Reading your statement..." },
@@ -177,6 +179,59 @@ export default function ExpenseDetector() {
             result = result.replace(pattern, value)
         }
         return result
+    }
+
+    const buildCsv = (headers: string[], rows: Array<Array<string | number>>) => {
+        const escapeCell = (value: string | number) => {
+            const str = String(value ?? "")
+            if (str.includes("\"") || str.includes(",") || str.includes("\n")) {
+                return `"${str.replace(/"/g, "\"\"")}"`
+            }
+            return str
+        }
+
+        const lines = [
+            headers.map(escapeCell).join(","),
+            ...rows.map(row => row.map(escapeCell).join(",")),
+        ]
+        return lines.join("\n")
+    }
+
+    const downloadCsv = (filename: string, csv: string) => {
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement("a")
+        link.href = url
+        link.download = filename
+        link.click()
+        URL.revokeObjectURL(url)
+    }
+
+    const downloadSummaryCsv = () => {
+        const headers = ["Type", "Title", "Description", "TotalAmount", "Count", "CurrencyCode", "CurrencySymbol"]
+        const rows = insights.map(i => [
+            i.type,
+            i.title,
+            i.description,
+            i.totalAmount,
+            i.count,
+            currency.code,
+            currency.symbol,
+        ])
+        downloadCsv("expense-insights-summary.csv", buildCsv(headers, rows))
+    }
+
+    const downloadTransactionsCsv = () => {
+        const headers = ["Date", "Description", "Amount", "Type", "CurrencyCode", "CurrencySymbol"]
+        const rows = parsedTransactions.map(tx => [
+            tx.Date,
+            tx.Description,
+            tx.Amount,
+            tx.Type,
+            currency.code,
+            currency.symbol,
+        ])
+        downloadCsv("expense-transactions.csv", buildCsv(headers, rows))
     }
 
     const parsePdf = async (arrayBuffer: ArrayBuffer, password?: string) => {
@@ -405,6 +460,7 @@ export default function ExpenseDetector() {
         setPdfPasswordError("")
         setPendingPdfFile(null)
         setCurrency(DEFAULT_CURRENCY)
+        setChartType("category")
     }
 
     const cancelPassword = () => {
@@ -546,6 +602,104 @@ export default function ExpenseDetector() {
                     animate={{ opacity: 1 }}
                     className="space-y-6"
                 >
+                    <div className="rounded-2xl bg-white/40 dark:bg-black/40 backdrop-blur-xl border border-zinc-200/50 dark:border-zinc-800/50 p-6">
+                        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                            <div>
+                                <h3 className="text-lg font-semibold tracking-tight">Insights Overview</h3>
+                                <p className="text-sm text-muted-foreground">Quick visual breakdown of your spending patterns.</p>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Button
+                                    variant={chartType === "category" ? "default" : "outline"}
+                                    size="sm"
+                                    onClick={() => setChartType("category")}
+                                    className="rounded-full"
+                                >
+                                    <BarChart3 className="w-4 h-4 mr-2" />
+                                    Spending by Category
+                                </Button>
+                                <Button
+                                    variant={chartType === "merchant" ? "default" : "outline"}
+                                    size="sm"
+                                    onClick={() => setChartType("merchant")}
+                                    className="rounded-full"
+                                >
+                                    <PieChartIcon className="w-4 h-4 mr-2" />
+                                    Top Merchants
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={downloadSummaryCsv}
+                                    className="rounded-full"
+                                >
+                                    <Download className="w-4 h-4 mr-2" />
+                                    Download Summary
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={downloadTransactionsCsv}
+                                    className="rounded-full"
+                                >
+                                    <Download className="w-4 h-4 mr-2" />
+                                    Download Transactions
+                                </Button>
+                            </div>
+                        </div>
+
+                        <div className="mt-5 h-64">
+                            {chartType === "category" ? (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart
+                                        data={[
+                                            { name: "Subscriptions", value: insights.filter(i => i.type === "subscription").reduce((a, b) => a + b.totalAmount, 0) },
+                                            { name: "Transport", value: insights.filter(i => i.type === "transport").reduce((a, b) => a + b.totalAmount, 0) },
+                                            { name: "Bank Fees", value: insights.filter(i => i.type === "fee").reduce((a, b) => a + b.totalAmount, 0) },
+                                            { name: "Patterns", value: insights.filter(i => i.type === "frequent").reduce((a, b) => a + b.totalAmount, 0) },
+                                        ].filter(item => item.value > 0)}
+                                        margin={{ top: 10, right: 10, left: 0, bottom: 10 }}
+                                    >
+                                        <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                                        <YAxis tick={{ fontSize: 12 }} />
+                                        <Tooltip
+                                            formatter={(value: any) => formatMoney(Number(value))}
+                                            cursor={{ fill: "rgba(0,0,0,0.04)" }}
+                                        />
+                                        <Bar dataKey="value" fill="#6366F1" radius={[8, 8, 0, 0]} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <PieChart>
+                                        <Pie
+                                            data={(() => {
+                                                const grouped = new Map<string, number>()
+                                                insights.forEach(i => {
+                                                    const key = (i.merchantKeyword || i.title).toUpperCase()
+                                                    grouped.set(key, (grouped.get(key) || 0) + i.totalAmount)
+                                                })
+                                                return Array.from(grouped.entries())
+                                                    .map(([name, value]) => ({ name, value }))
+                                                    .sort((a, b) => b.value - a.value)
+                                                    .slice(0, 6)
+                                            })()}
+                                            dataKey="value"
+                                            nameKey="name"
+                                            innerRadius={55}
+                                            outerRadius={90}
+                                            paddingAngle={2}
+                                        >
+                                            {["#6366F1", "#38BDF8", "#F97316", "#10B981", "#F43F5E", "#A855F7"].map((color, idx) => (
+                                                <Cell key={color} fill={color} />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip formatter={(value: any) => formatMoney(Number(value))} />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                            )}
+                        </div>
+                    </div>
                     <div className="rounded-2xl bg-white/40 dark:bg-black/40 backdrop-blur-xl border border-zinc-200/50 dark:border-zinc-800/50 p-6">
                         <div className="flex items-start justify-between gap-4">
                             <div>
