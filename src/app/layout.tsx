@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Smart Expense Detective",
+  title: "Smart Expense Agent",
   description: "Upload your bank statement and instantly discover hidden subscriptions, unexpected fees, and duplicate charges — powered by AI.",
   icons: {
     icon: "/icon.svg",

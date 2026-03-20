@@ -550,7 +550,7 @@ export default function ExpenseDetector() {
                         <div className="flex items-start justify-between gap-4">
                             <div>
                                 <h2 className="text-2xl font-bold tracking-tight mb-1">
-                                    {userName ? `Hey ${userName}, here's what we found 🕵️` : "Detective Report 🕵️"}
+                                    {userName ? `Hey ${userName}, here's what we found 🕵️` : "Agent Report 🕵️"}
                                 </h2>
                                 <p className="text-sm text-muted-foreground">
                                     We detected <span className="font-semibold text-foreground">{insights.length} spending patterns</span> in{" "}

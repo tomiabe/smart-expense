@@ -15,7 +15,7 @@ export default function Home() {
             Powered by Deepmind AI
           </div>
           <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold tracking-tighter text-zinc-900 dark:text-white mb-6">
-            Smart Expense <br /> <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">Detective</span>
+            Smart Expense <br /> <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">Agent</span>
           </h1>
           <p className="text-lg md:text-xl text-zinc-600 dark:text-zinc-400 font-medium mb-8 max-w-xl mx-auto leading-relaxed">
             Upload your statement and instantly discover hidden subscriptions, unexpected fees, and duplicate charges.
