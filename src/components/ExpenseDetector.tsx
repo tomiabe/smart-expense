@@ -683,7 +683,10 @@ export default function ExpenseDetector() {
                                             formatter={(value: any) => formatMoney(Number(value))}
                                             cursor={{ fill: "rgba(0,0,0,0.04)" }}
                                         />
-                                        <Bar dataKey="value" fill="#6366F1" radius={[8, 8, 0, 0]}>
+                                        <Bar dataKey="value" radius={[8, 8, 0, 0]}>
+                                            {categoryChartData.map((_, idx) => (
+                                                <Cell key={`bar-${idx}`} fill={chartColors[idx % chartColors.length]} />
+                                            ))}
                                             <LabelList dataKey="value" position="top" formatter={(value: any) => formatMoney(Number(value))} />
                                         </Bar>
                                     </BarChart>
@@ -708,6 +711,20 @@ export default function ExpenseDetector() {
                                 </ResponsiveContainer>
                             )}
                         </div>
+
+                        {chartType === "category" && categoryChartData.length > 0 && (
+                            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                                {categoryChartData.map((item, idx) => (
+                                    <div key={item.name} className="flex items-center justify-between gap-3 rounded-lg border border-border/40 bg-muted/20 px-3 py-2">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: chartColors[idx % chartColors.length] }} />
+                                            <span className="text-xs font-medium truncate">{item.name}</span>
+                                        </div>
+                                        <span className="text-xs text-muted-foreground shrink-0">{formatMoney(item.value)}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
 
                         {chartType === "merchant" && merchantChartData.length > 0 && (
                             <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
