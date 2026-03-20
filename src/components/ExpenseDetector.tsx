@@ -234,7 +234,26 @@ export default function ExpenseDetector() {
         downloadCsv("expense-transactions.csv", buildCsv(headers, rows))
     }
 
-    const chartColors = ["#6366F1", "#38BDF8", "#F97316", "#10B981", "#F43F5E", "#A855F7"]
+    const chartColors = ["#6366F1", "#38BDF8", "#F97316", "#10B981", "#F43F5E", "#A855F7", "#0EA5E9", "#14B8A6"]
+    const categoryColors: Record<string, string> = {
+        "Subscriptions": "#4F46E5",
+        "Transport": "#0EA5E9",
+        "Bank Fees": "#F97316",
+    }
+
+    const hashString = (value: string) => {
+        let hash = 0
+        for (let i = 0; i < value.length; i++) {
+            hash = (hash << 5) - hash + value.charCodeAt(i)
+            hash |= 0
+        }
+        return Math.abs(hash)
+    }
+
+    const getMerchantColor = (name: string) => {
+        const idx = hashString(name) % chartColors.length
+        return chartColors[idx]
+    }
 
     const categoryChartData = (() => {
         const base = [
@@ -253,7 +272,7 @@ export default function ExpenseDetector() {
         })
 
         const frequentBreakdown = Array.from(grouped.entries())
-            .map(([name, value]) => ({ name: `Frequent: ${name}`, value }))
+            .map(([name, value]) => ({ name: `Frequent: ${name}`, value, rawName: name }))
             .sort((a, b) => b.value - a.value)
             .slice(0, 3)
 
@@ -670,24 +689,33 @@ export default function ExpenseDetector() {
                             </div>
                         </div>
 
-                        <div className="mt-5 h-64">
+                        <div className="mt-5 h-72">
                             {chartType === "category" ? (
                                 <ResponsiveContainer width="100%" height="100%">
                                     <BarChart
                                         data={categoryChartData}
-                                        margin={{ top: 10, right: 10, left: 0, bottom: 10 }}
+                                        layout="vertical"
+                                        margin={{ top: 8, right: 16, left: 0, bottom: 8 }}
                                     >
-                                        <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                                        <YAxis tick={{ fontSize: 12 }} />
+                                        <XAxis type="number" hide />
+                                        <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={140} />
                                         <Tooltip
                                             formatter={(value: any) => formatMoney(Number(value))}
                                             cursor={{ fill: "rgba(0,0,0,0.04)" }}
                                         />
-                                        <Bar dataKey="value" radius={[8, 8, 0, 0]}>
-                                            {categoryChartData.map((_, idx) => (
-                                                <Cell key={`bar-${idx}`} fill={chartColors[idx % chartColors.length]} />
+                                        <Bar dataKey="value" radius={[10, 10, 10, 10]} barSize={26}>
+                                            {categoryChartData.map((item: any, idx) => {
+                                                const baseColor = categoryColors[item.name]
+                                                const frequentName = typeof item.rawName === "string" ? item.rawName : item.name.replace(/^Frequent:\\s*/i, "")
+                                                const fill = baseColor || getMerchantColor(frequentName)
+                                                return <Cell key={`bar-${idx}`} fill={fill} />
                                             ))}
-                                            <LabelList dataKey="value" position="top" formatter={(value: any) => formatMoney(Number(value))} />
+                                            <LabelList
+                                                dataKey="value"
+                                                position="insideRight"
+                                                formatter={(value: any) => formatMoney(Number(value))}
+                                                fill="#ffffff"
+                                            />
                                         </Bar>
                                     </BarChart>
                                 </ResponsiveContainer>
@@ -702,8 +730,8 @@ export default function ExpenseDetector() {
                                             outerRadius={90}
                                             paddingAngle={2}
                                         >
-                                            {chartColors.map((color, idx) => (
-                                                <Cell key={`${color}-${idx}`} fill={color} />
+                                            {merchantChartData.map((item, idx) => (
+                                                <Cell key={`${item.name}-${idx}`} fill={getMerchantColor(item.name)} />
                                             ))}
                                         </Pie>
                                         <Tooltip formatter={(value: any) => formatMoney(Number(value))} />
@@ -714,15 +742,19 @@ export default function ExpenseDetector() {
 
                         {chartType === "category" && categoryChartData.length > 0 && (
                             <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-                                {categoryChartData.map((item, idx) => (
+                                {categoryChartData.map((item: any, idx) => {
+                                    const baseColor = categoryColors[item.name]
+                                    const frequentName = typeof item.rawName === "string" ? item.rawName : item.name.replace(/^Frequent:\\s*/i, "")
+                                    const dotColor = baseColor || getMerchantColor(frequentName)
+                                    return (
                                     <div key={item.name} className="flex items-center justify-between gap-3 rounded-lg border border-border/40 bg-muted/20 px-3 py-2">
                                         <div className="flex items-center gap-2 min-w-0">
-                                            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: chartColors[idx % chartColors.length] }} />
+                                            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: dotColor }} />
                                             <span className="text-xs font-medium truncate">{item.name}</span>
                                         </div>
                                         <span className="text-xs text-muted-foreground shrink-0">{formatMoney(item.value)}</span>
                                     </div>
-                                ))}
+                                )})}
                             </div>
                         )}
 
@@ -733,7 +765,7 @@ export default function ExpenseDetector() {
                                     return (
                                         <div key={item.name} className="flex items-center justify-between gap-3 rounded-lg border border-border/40 bg-muted/20 px-3 py-2">
                                             <div className="flex items-center gap-2 min-w-0">
-                                                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: chartColors[idx % chartColors.length] }} />
+                                                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: getMerchantColor(item.name) }} />
                                                 <span className="text-xs font-medium truncate">{item.name}</span>
                                             </div>
                                             <span className="text-xs text-muted-foreground shrink-0">{formatMoney(item.value)} · {pct}%</span>
