@@ -153,6 +153,32 @@ export default function ExpenseDetector() {
         }
     }
 
+    const normalizeDescriptionCurrency = (text: string) => {
+        const symbol = currency.symbol
+        const replacements: Array<[RegExp, string]> = [
+            [/₦/g, symbol],
+            [/£/g, symbol],
+            [/\$/g, symbol],
+            [/€/g, symbol],
+            [/₵/g, symbol],
+            [/\bNGN\b/g, currency.code],
+            [/\bGBP\b/g, currency.code],
+            [/\bUSD\b/g, currency.code],
+            [/\bEUR\b/g, currency.code],
+            [/\bGHS\b/g, currency.code],
+            [/\bZAR\b/g, currency.code],
+            [/\bKES\b/g, currency.code],
+            [/\bCAD\b/g, currency.code],
+            [/\bAUD\b/g, currency.code],
+        ]
+
+        let result = text
+        for (const [pattern, value] of replacements) {
+            result = result.replace(pattern, value)
+        }
+        return result
+    }
+
     const parsePdf = async (arrayBuffer: ArrayBuffer, password?: string) => {
         try {
             const pdfjsLib = await import("pdfjs-dist")
@@ -341,6 +367,10 @@ export default function ExpenseDetector() {
                 if (i.type === "fee") icon = <AlertCircle className="w-5 h-5 text-red-500" />
                 if (i.type === "frequent") icon = <Repeat className="w-5 h-5 text-orange-500" />
 
+                const normalizedDescription = typeof i.description === "string"
+                    ? normalizeDescriptionCurrency(i.description)
+                    : i.description
+
                 const kw = (i.merchantKeyword || "").toLowerCase().trim()
                 const matchingTxs = parsed.filter(tx => {
                     const desc = tx.Description.toLowerCase()
@@ -349,7 +379,7 @@ export default function ExpenseDetector() {
                     return false
                 }).slice(0, 20)
 
-                return { ...i, id: `ai-${idx}`, icon, transactions: matchingTxs }
+                return { ...i, id: `ai-${idx}`, icon, description: normalizedDescription, transactions: matchingTxs }
             })
 
             setTotalSpent(totalSpent)
