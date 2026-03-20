@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from "react"
 import Papa from "papaparse"
 import { motion, AnimatePresence } from "framer-motion"
 import { UploadCloud, CarFront, Tv, AlertCircle, Search, Repeat, ChevronRight, Calendar, DollarSign, FileText, ChevronDown, Lock, Download, BarChart3, PieChart as PieChartIcon } from "lucide-react"
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from "recharts"
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, PieChart, Pie, Cell, LabelList } from "recharts"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -233,6 +233,46 @@ export default function ExpenseDetector() {
         ])
         downloadCsv("expense-transactions.csv", buildCsv(headers, rows))
     }
+
+    const chartColors = ["#6366F1", "#38BDF8", "#F97316", "#10B981", "#F43F5E", "#A855F7"]
+
+    const categoryChartData = (() => {
+        const base = [
+            { name: "Subscriptions", value: insights.filter(i => i.type === "subscription").reduce((a, b) => a + b.totalAmount, 0) },
+            { name: "Transport", value: insights.filter(i => i.type === "transport").reduce((a, b) => a + b.totalAmount, 0) },
+            { name: "Bank Fees", value: insights.filter(i => i.type === "fee").reduce((a, b) => a + b.totalAmount, 0) },
+        ].filter(item => item.value > 0)
+
+        const frequentInsights = insights.filter(i => i.type === "frequent")
+        if (frequentInsights.length === 0) return base
+
+        const grouped = new Map<string, number>()
+        frequentInsights.forEach(i => {
+            const key = (i.merchantKeyword || i.title).toUpperCase()
+            grouped.set(key, (grouped.get(key) || 0) + i.totalAmount)
+        })
+
+        const frequentBreakdown = Array.from(grouped.entries())
+            .map(([name, value]) => ({ name: `Frequent: ${name}`, value }))
+            .sort((a, b) => b.value - a.value)
+            .slice(0, 3)
+
+        return [...base, ...frequentBreakdown].filter(item => item.value > 0)
+    })()
+
+    const merchantChartData = (() => {
+        const grouped = new Map<string, number>()
+        insights.forEach(i => {
+            const key = (i.merchantKeyword || i.title).toUpperCase()
+            grouped.set(key, (grouped.get(key) || 0) + i.totalAmount)
+        })
+        return Array.from(grouped.entries())
+            .map(([name, value]) => ({ name, value }))
+            .sort((a, b) => b.value - a.value)
+            .slice(0, 6)
+    })()
+
+    const merchantTotal = merchantChartData.reduce((a, b) => a + b.value, 0)
 
     const parsePdf = async (arrayBuffer: ArrayBuffer, password?: string) => {
         try {
@@ -627,24 +667,6 @@ export default function ExpenseDetector() {
                                     <PieChartIcon className="w-4 h-4 mr-2" />
                                     Top Merchants
                                 </Button>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={downloadSummaryCsv}
-                                    className="rounded-full"
-                                >
-                                    <Download className="w-4 h-4 mr-2" />
-                                    Download Summary
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={downloadTransactionsCsv}
-                                    className="rounded-full"
-                                >
-                                    <Download className="w-4 h-4 mr-2" />
-                                    Download Transactions
-                                </Button>
                             </div>
                         </div>
 
@@ -652,12 +674,7 @@ export default function ExpenseDetector() {
                             {chartType === "category" ? (
                                 <ResponsiveContainer width="100%" height="100%">
                                     <BarChart
-                                        data={[
-                                            { name: "Subscriptions", value: insights.filter(i => i.type === "subscription").reduce((a, b) => a + b.totalAmount, 0) },
-                                            { name: "Transport", value: insights.filter(i => i.type === "transport").reduce((a, b) => a + b.totalAmount, 0) },
-                                            { name: "Bank Fees", value: insights.filter(i => i.type === "fee").reduce((a, b) => a + b.totalAmount, 0) },
-                                            { name: "Patterns", value: insights.filter(i => i.type === "frequent").reduce((a, b) => a + b.totalAmount, 0) },
-                                        ].filter(item => item.value > 0)}
+                                        data={categoryChartData}
                                         margin={{ top: 10, right: 10, left: 0, bottom: 10 }}
                                     >
                                         <XAxis dataKey="name" tick={{ fontSize: 12 }} />
@@ -666,38 +683,68 @@ export default function ExpenseDetector() {
                                             formatter={(value: any) => formatMoney(Number(value))}
                                             cursor={{ fill: "rgba(0,0,0,0.04)" }}
                                         />
-                                        <Bar dataKey="value" fill="#6366F1" radius={[8, 8, 0, 0]} />
+                                        <Bar dataKey="value" fill="#6366F1" radius={[8, 8, 0, 0]}>
+                                            <LabelList dataKey="value" position="top" formatter={(value: any) => formatMoney(Number(value))} />
+                                        </Bar>
                                     </BarChart>
                                 </ResponsiveContainer>
                             ) : (
                                 <ResponsiveContainer width="100%" height="100%">
                                     <PieChart>
                                         <Pie
-                                            data={(() => {
-                                                const grouped = new Map<string, number>()
-                                                insights.forEach(i => {
-                                                    const key = (i.merchantKeyword || i.title).toUpperCase()
-                                                    grouped.set(key, (grouped.get(key) || 0) + i.totalAmount)
-                                                })
-                                                return Array.from(grouped.entries())
-                                                    .map(([name, value]) => ({ name, value }))
-                                                    .sort((a, b) => b.value - a.value)
-                                                    .slice(0, 6)
-                                            })()}
+                                            data={merchantChartData}
                                             dataKey="value"
                                             nameKey="name"
                                             innerRadius={55}
                                             outerRadius={90}
                                             paddingAngle={2}
                                         >
-                                            {["#6366F1", "#38BDF8", "#F97316", "#10B981", "#F43F5E", "#A855F7"].map((color, idx) => (
-                                                <Cell key={color} fill={color} />
+                                            {chartColors.map((color, idx) => (
+                                                <Cell key={`${color}-${idx}`} fill={color} />
                                             ))}
                                         </Pie>
                                         <Tooltip formatter={(value: any) => formatMoney(Number(value))} />
                                     </PieChart>
                                 </ResponsiveContainer>
                             )}
+                        </div>
+
+                        {chartType === "merchant" && merchantChartData.length > 0 && (
+                            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                                {merchantChartData.map((item, idx) => {
+                                    const pct = merchantTotal > 0 ? Math.round((item.value / merchantTotal) * 100) : 0
+                                    return (
+                                        <div key={item.name} className="flex items-center justify-between gap-3 rounded-lg border border-border/40 bg-muted/20 px-3 py-2">
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: chartColors[idx % chartColors.length] }} />
+                                                <span className="text-xs font-medium truncate">{item.name}</span>
+                                            </div>
+                                            <span className="text-xs text-muted-foreground shrink-0">{formatMoney(item.value)} · {pct}%</span>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        )}
+
+                        <div className="mt-5 flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2">
+                            <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={downloadSummaryCsv}
+                                className="rounded-full bg-indigo-600 text-white hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+                            >
+                                <Download className="w-4 h-4 mr-2" />
+                                Download Summary
+                            </Button>
+                            <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={downloadTransactionsCsv}
+                                className="rounded-full bg-indigo-600 text-white hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+                            >
+                                <Download className="w-4 h-4 mr-2" />
+                                Download Transactions
+                            </Button>
                         </div>
                     </div>
                     <div className="rounded-2xl bg-white/40 dark:bg-black/40 backdrop-blur-xl border border-zinc-200/50 dark:border-zinc-800/50 p-6">
